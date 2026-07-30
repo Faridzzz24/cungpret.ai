@@ -124,12 +124,18 @@ function App() {
           
           if (response.status === 429) {
             const retryAfter = response.headers.get('retry-after');
-            const match = errMsg.match(/try again in ([\w\.]+)/i);
+            const match = errMsg.match(/try again in ([0-9ms\.]+)/i);
             
-            if (retryAfter) {
+            if (retryAfter && !isNaN(retryAfter)) {
               waitTime = `${retryAfter} detik`;
             } else if (match && match[1]) {
-              waitTime = match[1].replace('s', ' detik').replace('m', ' menit');
+              let t = match[1].toLowerCase();
+              t = t.replace('ms', ' milidetik');
+              if (t.includes('m') && !t.includes('milidetik')) {
+                t = t.replace('m', ' menit ');
+              }
+              t = t.replace('s', ' detik');
+              waitTime = t.trim();
             }
             throw new Error(`LIMIT_ERROR|${waitTime}`);
           }
