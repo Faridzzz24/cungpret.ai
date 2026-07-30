@@ -50,6 +50,8 @@ body {
   border-left: 1px solid var(--glass-border);
   border-right: 1px solid var(--glass-border);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 @media (min-width: 640px) {
