@@ -127,9 +127,11 @@ function App() {
             const match = errMsg.match(/try again in ([0-9ms\.]+)/i);
             
             if (retryAfter && !isNaN(retryAfter)) {
-              waitTime = `${retryAfter} detik`;
+              waitTime = `${Math.round(parseFloat(retryAfter))} detik`;
             } else if (match && match[1]) {
               let t = match[1].toLowerCase();
+              // Bulatkan angka desimal (contoh: 34.176 -> 34)
+              t = t.replace(/(\d+\.\d+)/g, (m) => Math.round(parseFloat(m)));
               t = t.replace('ms', ' milidetik');
               if (t.includes('m') && !t.includes('milidetik')) {
                 t = t.replace('m', ' menit ');
