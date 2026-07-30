@@ -116,15 +116,26 @@ function App() {
       });
 
       if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error("LIMIT SABAR YA SAYANG");
-        }
         let errMsg = 'API request failed';
+        let waitTime = 'beberapa saat';
         try {
           const errData = await response.json();
           errMsg = errData.error?.message || JSON.stringify(errData);
+          
+          if (response.status === 429) {
+            const retryAfter = response.headers.get('retry-after');
+            const match = errMsg.match(/try again in ([\w\.]+)/i);
+            
+            if (retryAfter) {
+              waitTime = `${retryAfter} detik`;
+            } else if (match && match[1]) {
+              waitTime = match[1].replace('s', ' detik').replace('m', ' menit');
+            }
+            throw new Error(`LIMIT_ERROR|${waitTime}`);
+          }
         } catch (e) {
-          errMsg = response.statusText;
+          if (e.message && e.message.startsWith('LIMIT_ERROR')) throw e;
+          if (!errMsg || errMsg === 'API request failed') errMsg = response.statusText;
         }
         throw new Error(errMsg);
       }
@@ -133,8 +144,12 @@ function App() {
       return data.choices[0].message.content;
     } catch (error) {
       console.error("Error fetching Groq response:", error);
-      if (error.message === "LIMIT SABAR YA SAYANG" || error.message.toLowerCase().includes("rate limit")) {
-        return "LIMIT SABAR YA SAYANG";
+      if (error.message && error.message.startsWith("LIMIT_ERROR|")) {
+        const time = error.message.split("|")[1];
+        return `LIMIT SABAR YA SAYANG, coba lagi dalem ${time} ya.`;
+      }
+      if (error.message === "LIMIT SABAR YA SAYANG" || (error.message && error.message.toLowerCase().includes("rate limit"))) {
+        return "LIMIT SABAR YA SAYANG, tunggu sebentar yak.";
       }
       return `Sori bro, error nih: ${error.message}`;
     }
