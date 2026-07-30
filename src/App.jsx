@@ -40,7 +40,17 @@ const INITIAL_MESSAGES = [
 function App() {
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [isTyping, setIsTyping] = useState(false);
+  const [limitTimer, setLimitTimer] = useState(0);
   const chatAreaRef = useRef(null);
+
+  useEffect(() => {
+    if (limitTimer > 0) {
+      const interval = setInterval(() => {
+        setLimitTimer((prev) => prev - 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [limitTimer]);
 
   const scrollToBottom = () => {
     if (chatAreaRef.current) {
@@ -126,9 +136,23 @@ function App() {
             const retryAfter = response.headers.get('retry-after');
             const match = errMsg.match(/try again in ([0-9ms\.]+)/i);
             
+            let rawSeconds = 0;
             if (retryAfter && !isNaN(retryAfter)) {
-              waitTime = `${Math.round(parseFloat(retryAfter))} detik`;
+              rawSeconds = Math.round(parseFloat(retryAfter));
+              waitTime = `${rawSeconds} detik`;
             } else if (match && match[1]) {
+              let tStr = match[1].toLowerCase();
+              if (tStr.includes('m') && !tStr.includes('ms')) {
+                 const mMatch = tStr.match(/(\d+)m/);
+                 const sMatch = tStr.match(/(\d+)s/);
+                 if (mMatch) rawSeconds += parseInt(mMatch[1]) * 60;
+                 if (sMatch) rawSeconds += parseInt(sMatch[1]);
+              } else if (tStr.includes('ms')) {
+                 rawSeconds = 1;
+              } else {
+                 rawSeconds = Math.round(parseFloat(tStr));
+              }
+
               let t = match[1].toLowerCase();
               // Bulatkan angka desimal (contoh: 34.176 -> 34)
               t = t.replace(/(\d+\.\d+)/g, (m) => Math.round(parseFloat(m)));
@@ -139,7 +163,7 @@ function App() {
               t = t.replace('s', ' detik');
               waitTime = t.trim();
             }
-            throw new Error(`LIMIT_ERROR|${waitTime}`);
+            throw new Error(`LIMIT_ERROR|${waitTime}|${rawSeconds}`);
           }
         } catch (e) {
           if (e.message && e.message.startsWith('LIMIT_ERROR')) throw e;
@@ -153,7 +177,10 @@ function App() {
     } catch (error) {
       console.error("Error fetching Groq response:", error);
       if (error.message && error.message.startsWith("LIMIT_ERROR|")) {
-        const time = error.message.split("|")[1];
+        const parts = error.message.split("|");
+        const time = parts[1];
+        const rawSecs = parseInt(parts[2]) || 0;
+        if (rawSecs > 0) setLimitTimer(rawSecs);
         return `LIMIT SABAR YA SAYANG, coba lagi dalem ${time} ya.`;
       }
       if (error.message === "LIMIT SABAR YA SAYANG" || (error.message && error.message.toLowerCase().includes("rate limit"))) {
@@ -204,6 +231,13 @@ function App() {
           </p>
         </div>
       </div>
+
+      {/* Limit Timer Banner */}
+      {limitTimer > 0 && (
+        <div className="limit-banner">
+          ⚠️ LIMIT SABAR YA SAYANG: Tunggu {Math.floor(limitTimer / 60) > 0 ? `${Math.floor(limitTimer / 60)} menit ` : ''}{limitTimer % 60} detik lagi...
+        </div>
+      )}
 
       {/* Chat Area */}
       <div className="chat-area" ref={chatAreaRef}>
