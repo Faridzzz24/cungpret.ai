@@ -2,7 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import ChatBubble from './components/ChatBubble';
 import MessageInput from './components/MessageInput';
 
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
+const API_KEYS = [
+  import.meta.env.VITE_GROQ_API_KEY,
+  import.meta.env.VITE_GROQ_API_KEY_2,
+].filter(Boolean);
+
+let currentKeyIndex = 0;
 const SYSTEM_PROMPT = `Kamu adalah chatbot teman ngobrol yang gaul, pinter, dan asik diajak diskusi apa aja — bukan asisten formal kayak AI kebanyakan.
 
 GAYA BICARA:
@@ -111,30 +116,40 @@ function App() {
         }))
       ];
 
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile', // Upgrade ke Llama 3.3 70B agar bahasa gaul & logika jauh lebih nyambung
-          messages: apiMessages,
-          temperature: 0.6,
-          max_tokens: 500,
-        })
-      });
+      for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
+        const apiKey = API_KEYS[currentKeyIndex];
+        
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile', // Upgrade ke Llama 3.3 70B agar bahasa gaul & logika jauh lebih nyambung
+            messages: apiMessages,
+            temperature: 0.6,
+            max_tokens: 500,
+          })
+        });
 
-      if (!response.ok) {
-        let errMsg = 'API request failed';
-        let waitTime = 'beberapa saat';
-        try {
-          const errData = await response.json();
-          errMsg = errData.error?.message || JSON.stringify(errData);
-          
-          if (response.status === 429) {
-            const retryAfter = response.headers.get('retry-after');
-            const match = errMsg.match(/try again in ([0-9ms\.]+)/i);
+        if (!response.ok) {
+          let errMsg = 'API request failed';
+          let waitTime = 'beberapa saat';
+          try {
+            const errData = await response.json();
+            errMsg = errData.error?.message || JSON.stringify(errData);
+            
+            if (response.status === 429) {
+              // Jika masih ada API Key lain, ganti key dan coba lagi
+              if (attempt < API_KEYS.length - 1) {
+                console.warn(`API Key ${currentKeyIndex + 1} limit. Switching to next key...`);
+                currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+                continue;
+              }
+              
+              const retryAfter = response.headers.get('retry-after');
+              const match = errMsg.match(/try again in ([0-9ms\.]+)/i);
             
             let rawSeconds = 0;
             if (retryAfter && !isNaN(retryAfter)) {
@@ -174,6 +189,7 @@ function App() {
 
       const data = await response.json();
       return data.choices[0].message.content;
+    } // End of retry loop
     } catch (error) {
       console.error("Error fetching Groq response:", error);
       if (error.message && error.message.startsWith("LIMIT_ERROR|")) {
