@@ -116,6 +116,9 @@ function App() {
       });
 
       if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error("LIMIT SABAR YA SAYANG");
+        }
         let errMsg = 'API request failed';
         try {
           const errData = await response.json();
@@ -130,6 +133,9 @@ function App() {
       return data.choices[0].message.content;
     } catch (error) {
       console.error("Error fetching Groq response:", error);
+      if (error.message === "LIMIT SABAR YA SAYANG" || error.message.toLowerCase().includes("rate limit")) {
+        return "LIMIT SABAR YA SAYANG";
+      }
       return `Sori bro, error nih: ${error.message}`;
     }
   };
