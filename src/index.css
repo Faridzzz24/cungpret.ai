@@ -245,7 +245,7 @@ body {
 
 .message-time {
   font-size: 0.75rem;
-  color: #71717a;
+  color: var(--accent-color);
   margin-top: 6px;
   margin-bottom: 2px;
 }
