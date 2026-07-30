@@ -119,6 +119,12 @@ body {
   flex-direction: column;
   gap: 16px;
   scroll-behavior: smooth;
+  background-image: 
+    radial-gradient(circle at 10% 90%, rgba(57, 255, 20, 0.06) 0%, transparent 30%),
+    radial-gradient(circle at 90% 10%, rgba(57, 255, 20, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 30% 30%, rgba(57, 255, 20, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 70% 80%, rgba(57, 255, 20, 0.05) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(57, 255, 20, 0.03) 0%, transparent 60%);
 }
 
 /* Custom Scrollbar */
