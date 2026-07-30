@@ -52,6 +52,44 @@ function App() {
     scrollToBottom();
   }, [messages, isTyping]);
 
+  // Anti-Inspect / Developer Tools Block
+  useEffect(() => {
+    // 1. Block right click (context menu)
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+    };
+
+    // 2. Block keyboard shortcuts (F12, Ctrl+Shift+I, Ctrl+Shift+C, Ctrl+Shift+J, Ctrl+U)
+    const handleKeyDown = (e) => {
+      // F12
+      if (e.key === 'F12') {
+        e.preventDefault();
+      }
+      
+      if (e.ctrlKey && e.shiftKey) {
+        // Ctrl+Shift+I (DevTools)
+        if (e.key === 'I' || e.key === 'i') e.preventDefault();
+        // Ctrl+Shift+C (Inspect Element)
+        if (e.key === 'C' || e.key === 'c') e.preventDefault();
+        // Ctrl+Shift+J (Console)
+        if (e.key === 'J' || e.key === 'j') e.preventDefault();
+      }
+
+      // Ctrl+U (View Source)
+      if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   const fetchAIResponse = async (chatHistory) => {
     try {
       const recentHistory = chatHistory.slice(-10);
