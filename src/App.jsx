@@ -141,21 +141,21 @@ function App() {
               rawSeconds = Math.round(parseFloat(retryAfter));
               waitTime = `${rawSeconds} detik`;
             } else if (match && match[1]) {
-              let tStr = match[1].toLowerCase();
-              if (tStr.includes('m') && !tStr.includes('ms')) {
-                 const mMatch = tStr.match(/(\d+)m/);
-                 const sMatch = tStr.match(/(\d+)s/);
+              let t = match[1].toLowerCase();
+              // Bulatkan angka desimal DULU biar rawSeconds nggak ngaco ngebaca digit di belakang koma
+              t = t.replace(/(\d+\.\d+)/g, (m) => Math.round(parseFloat(m)));
+              
+              if (t.includes('m') && !t.includes('ms')) {
+                 const mMatch = t.match(/(\d+)m/);
+                 const sMatch = t.match(/(\d+)s/);
                  if (mMatch) rawSeconds += parseInt(mMatch[1]) * 60;
                  if (sMatch) rawSeconds += parseInt(sMatch[1]);
-              } else if (tStr.includes('ms')) {
+              } else if (t.includes('ms')) {
                  rawSeconds = 1;
               } else {
-                 rawSeconds = Math.round(parseFloat(tStr));
+                 rawSeconds = parseInt(t) || 0;
               }
 
-              let t = match[1].toLowerCase();
-              // Bulatkan angka desimal (contoh: 34.176 -> 34)
-              t = t.replace(/(\d+\.\d+)/g, (m) => Math.round(parseFloat(m)));
               t = t.replace('ms', ' milidetik');
               if (t.includes('m') && !t.includes('milidetik')) {
                 t = t.replace('m', ' menit ');
