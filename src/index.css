@@ -246,6 +246,7 @@ body {
 .message-time {
   font-size: 0.75rem;
   color: var(--accent-color);
+  text-shadow: 0 0 8px var(--accent-color);
   margin-top: 6px;
   margin-bottom: 2px;
 }
