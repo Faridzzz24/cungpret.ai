@@ -65,7 +65,7 @@ function App() {
           'Authorization': `Bearer ${GROQ_API_KEY}`
         },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant', // Using Llama 3.1 8B Instant model from Groq
+          model: 'llama-3.3-70b-versatile', // Upgrade ke Llama 3.3 70B agar bahasa gaul & logika jauh lebih nyambung
           messages: apiMessages,
           temperature: 0.6,
           max_tokens: 500,
