@@ -127,7 +127,9 @@ function App() {
     <div className="app-container">
       {/* Header */}
       <div className="header">
-        <div className="avatar">AI</div>
+        <div className="avatar">
+          <img src="/avatar.png" alt="Cungpret AI" />
+        </div>
         <div className="header-info">
           <h1>CUNGPRET AI</h1>
           <p>
