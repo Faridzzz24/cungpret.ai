@@ -5,7 +5,7 @@ import MessageInput from './components/MessageInput';
 const API_KEYS = [
   import.meta.env.VITE_GROQ_API_KEY,
   import.meta.env.VITE_GROQ_API_KEY_2,
-].filter(Boolean);
+].map(key => key ? key.trim() : null).filter(Boolean);
 
 let currentKeyIndex = 0;
 const SYSTEM_PROMPT = `Kamu adalah chatbot teman ngobrol yang gaul, pinter, dan asik diajak diskusi apa aja — bukan asisten formal kayak AI kebanyakan.
