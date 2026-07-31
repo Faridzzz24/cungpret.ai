@@ -208,6 +208,55 @@ body {
   font-family: inherit;
 }
 
+.curhat-setup-card {
+  background: rgba(15, 15, 15, 0.9);
+  border: 1px solid var(--accent-color);
+  border-radius: 16px;
+  padding: 24px;
+  margin-top: 12px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(57, 255, 20, 0.1);
+  animation: fadeIn 0.4s ease forwards;
+}
+
+.curhat-setup-card h3 {
+  color: var(--accent-color);
+  margin-bottom: 8px;
+  font-size: 1.2rem;
+}
+
+.curhat-setup-card p {
+  color: #a1a1aa;
+  margin-bottom: 20px;
+  font-size: 0.95rem;
+}
+
+.setup-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.setup-buttons button {
+  background: rgba(10, 10, 10, 0.6);
+  border: 1px solid var(--accent-color);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.setup-buttons button:hover {
+  background: var(--accent-hover);
+  color: #000;
+  box-shadow: 0 4px 15px rgba(57, 255, 20, 0.3);
+  transform: translateY(-2px);
+}
+
+
 .input-box:focus {
   border-color: var(--accent-color);
   box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.3);

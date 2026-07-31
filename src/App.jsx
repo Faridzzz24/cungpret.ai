@@ -36,12 +36,12 @@ BATASAN:
 - Toxic/sarkas/kasar (bahkan ekstrim) sangat diperbolehkan buat gaya bercanda atau kalau user ngelunjak.
 - Kalau user lagi butuh dukungan emosional beneran (bukan cuma curhat santai), jangan diterusin bercandaan toxic-nya`;
 
-const CURHAT_PROMPT = `Kamu adalah teman curhat yang sangat empatik, peduli, suportif, dan pendengar yang baik. Kamu memposisikan diri sebagai sahabat dekat yang bisa diandalkan.
+const getCurhatPrompt = (pronoun, gender) => `Kamu adalah teman curhat yang sangat empatik, peduli, suportif, dan pendengar yang baik. Kamu memposisikan diri sebagai sahabat dekat yang bisa diandalkan.
 
 GAYA BICARA:
-- JIKA USER BARU PERTAMA KALI NGE-CHAT ATAU BELUM PERNAH DITANYA: Bales dulu pesannya dengan hangat, lalu di akhir pesan WAJIB tanya dua hal ini buat nyesuain gaya bahasa: (1) Lebih nyaman pake "aku-kamu" atau "gue-lo"? (2) User ini cowok atau cewek?
-- JIKA USER CEWEK: Ubah gaya bahasamu jadi layaknya sahabat cewek (bestie) yang asik, manis, dan pengertian. Panggil dia dengan sapaan akrab (seperti "bestie", "beb") SECUKUPNYA saja. WAJIB NATURAL: Jangan berlebihan, jangan lebay/alay, dan jangan annoying. Tetap elegan dan enak dibaca.
-- JIKA USER COWOK: Jadi sahabat yang asik, suportif, saling dukung layaknya "bro" tapi lebih deep dan tetap empati.
+- Kamu WAJIB menggunakan kata ganti ${pronoun === 'aku-kamu' ? '"aku" untuk dirimu dan "kamu" untuk user' : '"gue" untuk dirimu dan "lo" untuk user'}.
+- User ini adalah seorang ${gender === 'cewek' ? 'Perempuan (Cewek)' : 'Laki-laki (Cowok)'}.
+${gender === 'cewek' ? '- Karena user cewek, ubah gaya bahasamu jadi layaknya sahabat cewek (bestie) yang asik, manis, dan pengertian. Panggil dia dengan sapaan akrab (seperti "bestie", "beb") SECUKUPNYA saja. WAJIB NATURAL: Jangan berlebihan, jangan lebay/alay, dan jangan annoying. Tetap elegan dan enak dibaca.' : '- Karena user cowok, jadi sahabat yang asik, suportif, saling dukung layaknya "bro" tapi lebih deep dan tetap empati.'}
 - Jangan menghakimi, menggurui, atau memberi saran kalau tidak diminta. Kadang user hanya ingin didengarkan dan divalidasi perasaannya.
 - Kalau user menceritakan masalah berat, tunjukkan simpati yang tulus. Validasi perasaannya (misal: "Wajar banget lo ngerasa gitu", "Gue ngerti banget rasanya...").
 - Kalau user ngomongin gosip atau drama, ikutan antusias dan kepo layaknya sahabat yang lagi gibah bareng, tapi tetap menjaga porsi agar tidak terlihat toxic.
@@ -67,7 +67,10 @@ function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [limitTimer, setLimitTimer] = useState(0);
   const [botMode, setBotMode] = useState('biasa');
+  const [curhatSetup, setCurhatSetup] = useState({ pronoun: null, gender: null });
   const chatAreaRef = useRef(null);
+
+  const isSetupNeeded = botMode === 'curhat' && (!curhatSetup.pronoun || !curhatSetup.gender);
 
   useEffect(() => {
     if (limitTimer > 0) {
@@ -129,7 +132,7 @@ function App() {
   const fetchAIResponse = async (chatHistory) => {
     try {
       const recentHistory = chatHistory.slice(-10);
-      const activePrompt = botMode === 'curhat' ? CURHAT_PROMPT : NORMAL_PROMPT;
+      const activePrompt = botMode === 'curhat' ? getCurhatPrompt(curhatSetup.pronoun, curhatSetup.gender) : NORMAL_PROMPT;
       const apiMessages = [
         { role: 'system', content: activePrompt },
         ...recentHistory.map(msg => ({
@@ -324,10 +327,34 @@ function App() {
           />
         ))}
         {isTyping && <ChatBubble isTyping={true} sender="ai" />}
+        
+        {/* Curhat Setup UI */}
+        {isSetupNeeded && (
+          <div className="curhat-setup-card">
+            <h3>✨ Setup Mode Curhat</h3>
+            {!curhatSetup.pronoun ? (
+              <>
+                <p>Pilih gaya bahasa yang paling nyaman buat ngobrol:</p>
+                <div className="setup-buttons">
+                  <button onClick={() => setCurhatSetup(prev => ({...prev, pronoun: 'aku-kamu'}))}>Aku - Kamu</button>
+                  <button onClick={() => setCurhatSetup(prev => ({...prev, pronoun: 'gue-lo'}))}>Gue - Lo</button>
+                </div>
+              </>
+            ) : !curhatSetup.gender ? (
+              <>
+                <p>Satu lagi, biar nyambung, kamu cewek atau cowok?</p>
+                <div className="setup-buttons">
+                  <button onClick={() => setCurhatSetup(prev => ({...prev, gender: 'cewek'}))}>👧 Cewek</button>
+                  <button onClick={() => setCurhatSetup(prev => ({...prev, gender: 'cowok'}))}>👦 Cowok</button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {/* Input Area */}
-      <MessageInput onSendMessage={handleSendMessage} disabled={isTyping} />
+      <MessageInput onSendMessage={handleSendMessage} disabled={isTyping || isSetupNeeded} />
     </div>
   );
 }
