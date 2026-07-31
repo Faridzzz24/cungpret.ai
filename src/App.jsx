@@ -5,10 +5,13 @@ import MessageInput from './components/MessageInput';
 const API_KEYS = [
   import.meta.env.VITE_GROQ_API_KEY,
   import.meta.env.VITE_GROQ_API_KEY_2,
+  import.meta.env.VITE_GROQ_API_KEY_3,
+  import.meta.env.VITE_GROQ_API_KEY_4,
 ].map(key => key ? key.trim() : null).filter(Boolean);
 
 let currentKeyIndex = 0;
-const SYSTEM_PROMPT = `Kamu adalah chatbot teman ngobrol yang gaul, pinter, dan asik diajak diskusi apa aja — bukan asisten formal kayak AI kebanyakan.
+const keyCooldowns = new Array(API_KEYS.length).fill(0); // nyimpen timestamp kapan key ini bisa dipake lagi
+const NORMAL_PROMPT = `Kamu adalah chatbot teman ngobrol yang gaul, pinter, dan asik diajak diskusi apa aja — bukan asisten formal kayak AI kebanyakan.
 
 GAYA BICARA:
 - Secara default, gaya lu santai, asik, dan seru kayak temen tongkrongan biasa (pake lo-gue).
@@ -33,6 +36,21 @@ BATASAN:
 - Toxic/sarkas/kasar (bahkan ekstrim) sangat diperbolehkan buat gaya bercanda atau kalau user ngelunjak.
 - Kalau user lagi butuh dukungan emosional beneran (bukan cuma curhat santai), jangan diterusin bercandaan toxic-nya`;
 
+const CURHAT_PROMPT = `Kamu adalah teman curhat yang sangat empatik, peduli, suportif, dan pendengar yang baik. Kamu memposisikan diri sebagai sahabat dekat yang bisa diandalkan.
+
+GAYA BICARA:
+- Gaya bahasamu tetap santai (menggunakan lo-gue atau aku-kamu, senyamannya user), tapi lebih lembut, hangat, dan penuh perhatian.
+- Jangan menghakimi, menggurui, atau memberi saran kalau tidak diminta. Kadang user hanya ingin didengarkan dan divalidasi perasaannya.
+- Kalau user menceritakan masalah berat, tunjukkan simpati yang tulus. Validasi perasaannya (misal: "Wajar banget lo ngerasa gitu", "Gue ngerti banget rasanya...").
+- Kalau user ngomongin gosip atau drama, ikutan antusias dan kepo layaknya sahabat yang lagi gibah bareng, tapi tetap menjaga porsi agar tidak terlihat toxic.
+
+ATURAN UTAMA — BALESAN:
+1. FOKUS KE EMOSI USER. Tanggapi dulu perasaan mereka sebelum menanggapi fakta ceritanya.
+2. JANGAN MEMOTONG ATAU MENGGANTI TOPIK. Biarkan user bercerita sampai tuntas.
+3. Kalau cerita user sedih, kasih dukungan moral. Kalau ceritanya seru/kepo, kasih reaksi yang excited.
+4. Gunakan emoji yang hangat (seperti ❤️, 🥺, 🤗) untuk memperkuat rasa simpati, atau emoji lucu kalau lagi gibah.
+5. Hindari kata-kata toxic, kasar, atau sarkas kecuali user yang mulai duluan dalam konteks bercanda ringan.`;
+
 const INITIAL_MESSAGES = [
   {
     id: 1,
@@ -46,6 +64,7 @@ function App() {
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [isTyping, setIsTyping] = useState(false);
   const [limitTimer, setLimitTimer] = useState(0);
+  const [botMode, setBotMode] = useState('biasa');
   const chatAreaRef = useRef(null);
 
   useEffect(() => {
@@ -108,15 +127,44 @@ function App() {
   const fetchAIResponse = async (chatHistory) => {
     try {
       const recentHistory = chatHistory.slice(-10);
+      const activePrompt = botMode === 'curhat' ? CURHAT_PROMPT : NORMAL_PROMPT;
       const apiMessages = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: activePrompt },
         ...recentHistory.map(msg => ({
           role: msg.sender === 'ai' ? 'assistant' : 'user',
           content: msg.text
         }))
       ];
 
+      const now = Date.now();
+      
+      // Cek dulu apa semua key lagi cooldown
+      let allCooldown = true;
+      let shortestCooldown = Infinity;
+      
+      for (let i = 0; i < API_KEYS.length; i++) {
+        if (now >= keyCooldowns[i]) {
+          allCooldown = false;
+          break;
+        } else {
+          const waitTime = keyCooldowns[i] - now;
+          if (waitTime < shortestCooldown) shortestCooldown = waitTime;
+        }
+      }
+
+      if (allCooldown && API_KEYS.length > 0) {
+        const rawSeconds = Math.ceil(shortestCooldown / 1000);
+        const timeStr = rawSeconds > 60 ? `${Math.floor(rawSeconds / 60)} menit ${rawSeconds % 60} detik` : `${rawSeconds} detik`;
+        throw new Error(`LIMIT_ERROR|${timeStr}|${rawSeconds}`);
+      }
+
       for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
+        // Skip kalau key ini masih cooldown
+        if (now < keyCooldowns[currentKeyIndex]) {
+          currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+          continue;
+        }
+
         const apiKey = API_KEYS[currentKeyIndex];
         
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -135,61 +183,63 @@ function App() {
 
         if (!response.ok) {
           let errMsg = 'API request failed';
-          let waitTime = 'beberapa saat';
+          let errData = null;
           try {
-            const errData = await response.json();
+            errData = await response.json();
             errMsg = errData.error?.message || JSON.stringify(errData);
+          } catch (e) {
+            errMsg = response.statusText || `HTTP ${response.status}`;
+          }
+
+          const isRateLimit = response.status === 429 || 
+                              errMsg.toLowerCase().includes('rate limit') || 
+                              errMsg.toLowerCase().includes('too many requests');
+
+          if (isRateLimit) {
+            // Ekstrak waktu tunggu
+            let rawSeconds = 10; // default 10 detik kalo ga nemu
+            const retryAfter = response.headers.get('retry-after');
+            const match = errMsg.match(/try again in ([0-9ms\.]+)/i);
             
-            if (response.status === 429) {
-              // Jika masih ada API Key lain, ganti key dan coba lagi
-              if (attempt < API_KEYS.length - 1) {
-                console.warn(`API Key ${currentKeyIndex + 1} limit. Switching to next key...`);
-                currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
-                continue;
-              }
-              
-              const retryAfter = response.headers.get('retry-after');
-              const match = errMsg.match(/try again in ([0-9ms\.]+)/i);
-            
-            let rawSeconds = 0;
             if (retryAfter && !isNaN(retryAfter)) {
               rawSeconds = Math.round(parseFloat(retryAfter));
-              waitTime = `${rawSeconds} detik`;
             } else if (match && match[1]) {
               let t = match[1].toLowerCase();
-              // Bulatkan angka desimal DULU biar rawSeconds nggak ngaco ngebaca digit di belakang koma
-              t = t.replace(/(\d+\.\d+)/g, (m) => Math.round(parseFloat(m)));
-              
-              if (t.includes('m') && !t.includes('ms')) {
-                 const mMatch = t.match(/(\d+)m/);
-                 const sMatch = t.match(/(\d+)s/);
-                 if (mMatch) rawSeconds += parseInt(mMatch[1]) * 60;
-                 if (sMatch) rawSeconds += parseInt(sMatch[1]);
-              } else if (t.includes('ms')) {
-                 rawSeconds = 1;
-              } else {
-                 rawSeconds = parseInt(t) || 0;
-              }
-
-              t = t.replace('ms', ' milidetik');
-              if (t.includes('m') && !t.includes('milidetik')) {
-                t = t.replace('m', ' menit ');
-              }
-              t = t.replace('s', ' detik');
-              waitTime = t.trim();
+              let secs = 0;
+              const mMatch = t.match(/(\d+(?:\.\d+)?)m/);
+              const sMatch = t.match(/(\d+(?:\.\d+)?)s/);
+              if (mMatch && !t.includes('ms')) secs += parseFloat(mMatch[1]) * 60;
+              if (sMatch) secs += parseFloat(sMatch[1]);
+              if (t.includes('ms')) secs = 1;
+              if (secs > 0) rawSeconds = Math.round(secs);
             }
-            throw new Error(`LIMIT_ERROR|${waitTime}|${rawSeconds}`);
-          }
-        } catch (e) {
-          if (e.message && e.message.startsWith('LIMIT_ERROR')) throw e;
-          if (!errMsg || errMsg === 'API request failed') errMsg = response.statusText;
-        }
-        throw new Error(errMsg);
-      }
 
-      const data = await response.json();
-      return data.choices[0].message.content;
-    } // End of retry loop
+            // Set cooldown buat key ini
+            keyCooldowns[currentKeyIndex] = Date.now() + (rawSeconds * 1000);
+            console.warn(`API Key ${currentKeyIndex + 1} limit. Cooldown ${rawSeconds}s. Switching to next key...`);
+            
+            // Ganti ke key berikutnya
+            currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+            continue; // Otomatis lanjut nyoba key baru tanpa nunggu user
+          }
+
+          throw new Error(errMsg);
+        }
+
+        const data = await response.json();
+        return data.choices[0].message.content;
+      } // End of retry loop
+      
+      // Kalo sampe sini berarti semua key udah dicoba dan limit semua di cycle ini
+      // Kita hitung ulang shortest cooldown
+      let shortestCooldownAfterLoop = Infinity;
+      for (let i = 0; i < API_KEYS.length; i++) {
+         const waitTime = keyCooldowns[i] - Date.now();
+         if (waitTime > 0 && waitTime < shortestCooldownAfterLoop) shortestCooldownAfterLoop = waitTime;
+      }
+      const rawSeconds = Math.max(1, Math.ceil(shortestCooldownAfterLoop / 1000));
+      const timeStr = rawSeconds > 60 ? `${Math.floor(rawSeconds / 60)} menit ${rawSeconds % 60} detik` : `${rawSeconds} detik`;
+      throw new Error(`LIMIT_ERROR|${timeStr}|${rawSeconds}`);
     } catch (error) {
       console.error("Error fetching Groq response:", error);
       if (error.message && error.message.startsWith("LIMIT_ERROR|")) {
@@ -245,6 +295,12 @@ function App() {
           <p>
             <span className="status-dot"></span> Online
           </p>
+        </div>
+        <div className="mode-selector">
+          <select value={botMode} onChange={(e) => setBotMode(e.target.value)} className="mode-dropdown">
+            <option value="biasa">Biasa Aja</option>
+            <option value="curhat">Mode Curhat</option>
+          </select>
         </div>
       </div>
 
