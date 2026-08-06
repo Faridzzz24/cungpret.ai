@@ -12,6 +12,34 @@ const API_KEYS = [
 let currentKeyIndex = 0;
 const keyCooldowns = new Array(API_KEYS.length).fill(0); // nyimpen timestamp kapan key ini bisa dipake lagi
 
+// Bersihkan tag <think> dari output Qwen — smart sanitizer
+const cleanThinkTags = (raw) => {
+  if (!raw) return '';
+  let content = raw;
+
+  // Kalau ada </think>, ambil teks SETELAH tag terakhir </think> (itu jawaban aslinya)
+  if (content.includes('</think>')) {
+    const afterThink = content.substring(content.lastIndexOf('</think>') + 8).trim();
+    if (afterThink.length > 0) {
+      return afterThink;
+    }
+  }
+
+  // Kalau ada <think> tapi ga ada </think> (token abis di tengah mikir), strip semuanya
+  if (content.includes('<think>')) {
+    const beforeThink = content.substring(0, content.indexOf('<think>')).trim();
+    if (beforeThink.length > 0) {
+      return beforeThink;
+    }
+    // Ga ada teks di luar <think> sama sekali — model habis token buat mikir doang
+    return '';
+  }
+
+  // Bersihkan sisa orphan tags
+  content = content.replace(/<\/?think>/gi, '').trim();
+  return content;
+};
+
 const NORMAL_PROMPT = `/no_think
 Kamu adalah chatbot teman ngobrol yang gaul, pinter, dan asik diajak diskusi apa aja — bukan asisten formal kayak AI kebanyakan.
 DILARANG KERAS mengeluarkan proses berpikir, reasoning, atau tag <think> dalam jawaban. LANGSUNG jawab tanpa menunjukkan proses pikir internal!
@@ -203,7 +231,8 @@ function App() {
             model: selectedModel,
             messages: apiMessages,
             temperature: 0.6,
-            max_tokens: 600,
+            // Qwen butuh token lebih banyak karena suka mikir pake <think> sebelum jawab
+            max_tokens: hasImageInHistory ? 2048 : 600,
           })
         });
 
@@ -219,11 +248,12 @@ function App() {
 
           const isRateLimit = response.status === 429 || 
                               errMsg.toLowerCase().includes('rate limit') || 
-                              errMsg.toLowerCase().includes('too many requests') ||
-                              errMsg.toLowerCase().includes('over capacity');
+                              errMsg.toLowerCase().includes('too many requests');
 
-          if (isRateLimit) {
-            let rawSeconds = 10;
+          const isOverCapacity = errMsg.toLowerCase().includes('over capacity');
+
+          if (isRateLimit || isOverCapacity) {
+            let rawSeconds = isOverCapacity ? 5 : 10;
             const retryAfter = response.headers.get('retry-after');
             const match = errMsg.match(/try again in ([0-9ms.]+)/i);
             
@@ -241,7 +271,7 @@ function App() {
             }
 
             keyCooldowns[currentKeyIndex] = Date.now() + (rawSeconds * 1000);
-            console.warn(`API Key ${currentKeyIndex + 1} limit. Cooldown ${rawSeconds}s. Switching to next key...`);
+            console.warn(`API Key ${currentKeyIndex + 1} ${isOverCapacity ? 'over capacity' : 'rate limited'}. Cooldown ${rawSeconds}s. Switching...`);
             
             currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
             continue;
@@ -252,14 +282,36 @@ function App() {
 
         const data = await response.json();
         let content = data.choices?.[0]?.message?.content || '';
-        // Agresif bersihkan semua tag <think> — termasuk yang TIDAK TERTUTUP
-        content = content.replace(/<think>[\s\S]*?<\/think>/gi, '');  // Bersihkan pasangan lengkap
-        content = content.replace(/<think>[\s\S]*/gi, '');            // Bersihkan yang gak punya </think>
-        content = content.replace(/<\/think>/gi, '');                 // Bersihkan sisa orphan </think>
-        content = content.trim();
-        if (!content) content = 'Hmm, gue lagi loading nih, coba kirim lagi ya.';
-        return content;
+        return cleanThinkTags(content);
       } // End of retry loop
+
+      // Kalau semua key gagal & ada gambar, fallback ke llama text-only
+      if (hasImageInHistory) {
+        console.warn('Qwen over capacity, fallback ke llama text-only...');
+        const lastUserMsg = recentHistory.filter(m => m.sender === 'user').pop();
+        const fallbackText = lastUserMsg?.text || 'Ada gambar yang gue kirim, tapi model vision lagi penuh. Kasih tau user buat coba lagi ntar.';
+        const fallbackMessages = [
+          { role: 'system', content: activePrompt },
+          { role: 'user', content: `[User mengirim gambar tapi model vision sedang penuh/overload. Kasih tau user dengan gaya gaul bahwa fitur lihat gambar lagi sibuk, suruh coba lagi beberapa detik.] Pesan user: "${fallbackText}"` }
+        ];
+        
+        // Cari key yg available buat llama
+        for (let i = 0; i < API_KEYS.length; i++) {
+          const idx = (currentKeyIndex + i) % API_KEYS.length;
+          if (Date.now() >= keyCooldowns[idx]) {
+            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEYS[idx]}` },
+              body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: fallbackMessages, temperature: 0.6, max_tokens: 300 })
+            });
+            if (res.ok) {
+              const d = await res.json();
+              return d.choices?.[0]?.message?.content || 'Waduh, fitur liat gambar lagi rame banget servernya. Coba kirim lagi bentar ya!';
+            }
+          }
+        }
+        return 'Waduh, fitur liat gambar lagi rame banget servernya. Coba kirim lagi bentar ya!';
+      }
       
       let shortestCooldownAfterLoop = Infinity;
       for (let i = 0; i < API_KEYS.length; i++) {
