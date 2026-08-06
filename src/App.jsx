@@ -163,19 +163,32 @@ function App() {
 
   const fetchAIResponse = async (chatHistory) => {
     try {
-      const recentHistory = chatHistory.slice(-10);
-      const hasImageInHistory = recentHistory.some(msg => !!msg.image);
+      const hasImageInHistory = chatHistory.slice(-5).some(msg => !!msg.image);
       
       // Pilih model: gunakan qwen/qwen3.6-27b bila ada gambar, atau llama-3.3-70b-versatile bila pure text
       const selectedModel = hasImageInHistory ? 'qwen/qwen3.6-27b' : 'llama-3.3-70b-versatile';
       
+      // Kurangi history untuk vision agar hemat token (gambar base64 makan token banyak)
+      const recentHistory = hasImageInHistory ? chatHistory.slice(-4) : chatHistory.slice(-10);
+      
       const activePrompt = botMode === 'curhat' ? getCurhatPrompt(curhatSetup.pronoun, curhatSetup.gender) : NORMAL_PROMPT;
+      
+      // Cari index pesan USER TERAKHIR yang punya gambar
+      let lastImageMsgIndex = -1;
+      for (let i = recentHistory.length - 1; i >= 0; i--) {
+        if (recentHistory[i].image && recentHistory[i].sender === 'user') {
+          lastImageMsgIndex = i;
+          break;
+        }
+      }
       
       const apiMessages = [
         { role: 'system', content: activePrompt },
-        ...recentHistory.map(msg => {
+        ...recentHistory.map((msg, idx) => {
           const role = msg.sender === 'ai' ? 'assistant' : 'user';
-          if (msg.image) {
+          
+          // HANYA sertakan gambar di pesan user TERAKHIR yang punya gambar (hemat token!)
+          if (msg.image && idx === lastImageMsgIndex) {
             return {
               role: 'user',
               content: [
@@ -184,10 +197,10 @@ function App() {
               ]
             };
           }
-          return {
-            role,
-            content: msg.text || ''
-          };
+          
+          // Pesan lama yg punya gambar: kirim teksnya aja tanpa data gambar
+          const text = msg.text || (msg.image ? '[User mengirim gambar]' : '');
+          return { role, content: text };
         })
       ];
 
@@ -231,8 +244,7 @@ function App() {
             model: selectedModel,
             messages: apiMessages,
             temperature: 0.6,
-            // Qwen butuh token lebih banyak karena suka mikir pake <think> sebelum jawab
-            max_tokens: hasImageInHistory ? 2048 : 600,
+            max_tokens: hasImageInHistory ? 1024 : 600,
           })
         });
 
@@ -251,6 +263,40 @@ function App() {
                               errMsg.toLowerCase().includes('too many requests');
 
           const isOverCapacity = errMsg.toLowerCase().includes('over capacity');
+          
+          // Handle request too large — retry dgn history minimal
+          const isTooLarge = errMsg.toLowerCase().includes('request too large') || 
+                             errMsg.toLowerCase().includes('reduce your message');
+          
+          if (isTooLarge && hasImageInHistory) {
+            console.warn('Request terlalu besar, retry dengan history minimal...');
+            // Ambil HANYA pesan user terakhir yang punya gambar
+            const lastMsg = recentHistory.filter(m => m.sender === 'user' && m.image).pop() 
+                         || recentHistory.filter(m => m.sender === 'user').pop();
+            if (lastMsg) {
+              const minimalMessages = [
+                { role: 'system', content: activePrompt },
+                lastMsg.image ? {
+                  role: 'user',
+                  content: [
+                    { type: 'text', text: lastMsg.text || 'Liat gambar ini dan kasih komentar lu' },
+                    { type: 'image_url', image_url: { url: lastMsg.image } }
+                  ]
+                } : { role: 'user', content: lastMsg.text || '' }
+              ];
+              const retryRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({ model: selectedModel, messages: minimalMessages, temperature: 0.6, max_tokens: 512 })
+              });
+              if (retryRes.ok) {
+                const retryData = await retryRes.json();
+                let retryContent = retryData.choices?.[0]?.message?.content || '';
+                return cleanThinkTags(retryContent) || 'Sori, gambar lu kegedean. Coba kirim yg lebih kecil ya.';
+              }
+            }
+            return 'Sori, gambar lu kegedean buat diproses. Coba kirim foto yg lebih kecil ya!';
+          }
 
           if (isRateLimit || isOverCapacity) {
             let rawSeconds = isOverCapacity ? 5 : 10;
