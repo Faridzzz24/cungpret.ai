@@ -163,32 +163,25 @@ function App() {
 
   const fetchAIResponse = async (chatHistory) => {
     try {
-      const hasImageInHistory = chatHistory.slice(-5).some(msg => !!msg.image);
+      // Cek apakah PESAN TERAKHIR dari user punya gambar
+      const lastUserMsg = chatHistory.filter(m => m.sender === 'user').pop();
+      const latestHasImage = !!(lastUserMsg?.image);
       
-      // Pilih model: gunakan qwen/qwen3.6-27b bila ada gambar, atau llama-3.3-70b-versatile bila pure text
-      const selectedModel = hasImageInHistory ? 'qwen/qwen3.6-27b' : 'llama-3.3-70b-versatile';
+      // HANYA pake Qwen kalau pesan terakhir ada gambarnya. Teks biasa selalu pake Llama.
+      const selectedModel = latestHasImage ? 'qwen/qwen3.6-27b' : 'llama-3.3-70b-versatile';
       
-      // Kurangi history untuk vision agar hemat token (gambar base64 makan token banyak)
-      const recentHistory = hasImageInHistory ? chatHistory.slice(-4) : chatHistory.slice(-10);
+      // Kurangi history untuk vision agar hemat token
+      const recentHistory = latestHasImage ? chatHistory.slice(-4) : chatHistory.slice(-10);
       
       const activePrompt = botMode === 'curhat' ? getCurhatPrompt(curhatSetup.pronoun, curhatSetup.gender) : NORMAL_PROMPT;
       
-      // Cari index pesan USER TERAKHIR yang punya gambar
-      let lastImageMsgIndex = -1;
-      for (let i = recentHistory.length - 1; i >= 0; i--) {
-        if (recentHistory[i].image && recentHistory[i].sender === 'user') {
-          lastImageMsgIndex = i;
-          break;
-        }
-      }
-      
       const apiMessages = [
         { role: 'system', content: activePrompt },
-        ...recentHistory.map((msg, idx) => {
+        ...recentHistory.map(msg => {
           const role = msg.sender === 'ai' ? 'assistant' : 'user';
           
-          // HANYA sertakan gambar di pesan user TERAKHIR yang punya gambar (hemat token!)
-          if (msg.image && idx === lastImageMsgIndex) {
+          // Sertakan gambar HANYA di pesan terakhir user (yang baru dikirim)
+          if (msg.image && msg === lastUserMsg && latestHasImage) {
             return {
               role: 'user',
               content: [
@@ -244,7 +237,7 @@ function App() {
             model: selectedModel,
             messages: apiMessages,
             temperature: 0.6,
-            max_tokens: hasImageInHistory ? 1024 : 600,
+            max_tokens: latestHasImage ? 1024 : 600,
           })
         });
 
@@ -268,7 +261,7 @@ function App() {
           const isTooLarge = errMsg.toLowerCase().includes('request too large') || 
                              errMsg.toLowerCase().includes('reduce your message');
           
-          if (isTooLarge && hasImageInHistory) {
+          if (isTooLarge && latestHasImage) {
             console.warn('Request terlalu besar, retry dengan history minimal...');
             // Ambil HANYA pesan user terakhir yang punya gambar
             const lastMsg = recentHistory.filter(m => m.sender === 'user' && m.image).pop() 
@@ -332,9 +325,8 @@ function App() {
       } // End of retry loop
 
       // Kalau semua key gagal & ada gambar, fallback ke llama text-only
-      if (hasImageInHistory) {
+      if (latestHasImage) {
         console.warn('Qwen over capacity, fallback ke llama text-only...');
-        const lastUserMsg = recentHistory.filter(m => m.sender === 'user').pop();
         const fallbackText = lastUserMsg?.text || 'Ada gambar yang gue kirim, tapi model vision lagi penuh. Kasih tau user buat coba lagi ntar.';
         const fallbackMessages = [
           { role: 'system', content: activePrompt },
