@@ -12,7 +12,9 @@ const API_KEYS = [
 let currentKeyIndex = 0;
 const keyCooldowns = new Array(API_KEYS.length).fill(0); // nyimpen timestamp kapan key ini bisa dipake lagi
 
-const NORMAL_PROMPT = `Kamu adalah chatbot teman ngobrol yang gaul, pinter, dan asik diajak diskusi apa aja — bukan asisten formal kayak AI kebanyakan.
+const NORMAL_PROMPT = `/no_think
+Kamu adalah chatbot teman ngobrol yang gaul, pinter, dan asik diajak diskusi apa aja — bukan asisten formal kayak AI kebanyakan.
+DILARANG KERAS mengeluarkan proses berpikir, reasoning, atau tag <think> dalam jawaban. LANGSUNG jawab tanpa menunjukkan proses pikir internal!
 
 GAYA BICARA:
 - Secara default, gaya lu santai, asik, dan seru kayak temen tongkrongan biasa (pake lo-gue).
@@ -38,7 +40,9 @@ BATASAN:
 - Toxic/sarkas/kasar (bahkan ekstrim) sangat diperbolehkan buat gaya bercanda atau kalau user ngelunjak.
 - Kalau user lagi butuh dukungan emosional beneran (bukan cuma curhat santai), jangan diterusin bercandaan toxic-nya.`;
 
-const getCurhatPrompt = (pronoun, gender) => `Kamu adalah teman curhat yang sangat empatik, peduli, suportif, dan pendengar yang baik. Kamu memposisikan diri sebagai sahabat dekat yang bisa diandalkan.
+const getCurhatPrompt = (pronoun, gender) => `/no_think
+Kamu adalah teman curhat yang sangat empatik, peduli, suportif, dan pendengar yang baik. Kamu memposisikan diri sebagai sahabat dekat yang bisa diandalkan.
+DILARANG KERAS mengeluarkan proses berpikir, reasoning, atau tag <think> dalam jawaban. LANGSUNG jawab tanpa menunjukkan proses pikir internal!
 
 GAYA BICARA:
 - KATA GANTI (SANGAT PENTING): Kamu WAJIB KONSISTEN 100% menggunakan kata ganti ${pronoun === 'aku-kamu' ? '"aku" (untuk dirimu) dan "kamu" (untuk user). DILARANG KERAS KECEPLOSAN MENGGUNAKAN KATA "gue/lo/gw/lu"!' : '"gue" (untuk dirimu) dan "lo/lu" (untuk user). DILARANG KERAS KECEPLOSAN MENGGUNAKAN KATA "aku/kamu"!'}.
@@ -248,8 +252,12 @@ function App() {
 
         const data = await response.json();
         let content = data.choices?.[0]?.message?.content || '';
-        // Bersihkan tag <think>...</think> agar output bersih dan to the point
-        content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        // Agresif bersihkan semua tag <think> — termasuk yang TIDAK TERTUTUP
+        content = content.replace(/<think>[\s\S]*?<\/think>/gi, '');  // Bersihkan pasangan lengkap
+        content = content.replace(/<think>[\s\S]*/gi, '');            // Bersihkan yang gak punya </think>
+        content = content.replace(/<\/think>/gi, '');                 // Bersihkan sisa orphan </think>
+        content = content.trim();
+        if (!content) content = 'Hmm, gue lagi loading nih, coba kirim lagi ya.';
         return content;
       } // End of retry loop
       
