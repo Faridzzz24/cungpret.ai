@@ -12,12 +12,12 @@ const API_KEYS = [
 let currentKeyIndex = 0;
 const keyCooldowns = new Array(API_KEYS.length).fill(0); // nyimpen timestamp kapan key ini bisa dipake lagi
 
-// Bersihkan tag <think> dari output Qwen — smart sanitizer
+// Bersihkan tag <think> dari output Qwen — smart bulletproof sanitizer
 const cleanThinkTags = (raw) => {
-  if (!raw) return '';
-  let content = raw;
+  if (!raw || typeof raw !== 'string') return '';
+  let content = raw.trim();
 
-  // Kalau ada </think>, ambil teks SETELAH tag terakhir </think> (itu jawaban aslinya)
+  // 1. Kalau ada penutup </think>, ambil teks SETELAH </think> terakhir (jawaban asli)
   if (content.includes('</think>')) {
     const afterThink = content.substring(content.lastIndexOf('</think>') + 8).trim();
     if (afterThink.length > 0) {
@@ -25,18 +25,29 @@ const cleanThinkTags = (raw) => {
     }
   }
 
-  // Kalau ada <think> tapi ga ada </think> (token abis di tengah mikir), strip semuanya
+  // 2. Kalau cuma ada <think> (model kehabisan token sebelum sempet nulis </think>),
+  // jangan buang isinya! Ambil apa yang dipikirkan model karena di dalamnya ada analisa gambarnya.
   if (content.includes('<think>')) {
-    const beforeThink = content.substring(0, content.indexOf('<think>')).trim();
-    if (beforeThink.length > 0) {
-      return beforeThink;
+    let inside = content.replace(/<think>/gi, '').replace(/<\/think>/gi, '').trim();
+    
+    // Hapus meta-reasoning pembuka jika ada (misal: "The user wants me to...", "I will answer...")
+    inside = inside
+      .replace(/^(the user|i need to|i should|let me|looking at|in this image|based on the image|first,|second,)[^\n.]*[\n.]+/gim, '')
+      .trim();
+
+    if (inside.length > 0) {
+      return inside;
     }
-    // Ga ada teks di luar <think> sama sekali — model habis token buat mikir doang
-    return '';
   }
 
-  // Bersihkan sisa orphan tags
+  // 3. Bersihkan sisa tag
   content = content.replace(/<\/?think>/gi, '').trim();
+  
+  // 4. Kalau masih kosong, berikan fallback agar tidak pernah ada bubble kosong
+  if (!content || content.trim() === '') {
+    return 'Gue liat gambarnya! Mau lu tanyain atau komentarin bagian apanya nih?';
+  }
+
   return content;
 };
 
@@ -237,7 +248,7 @@ function App() {
             model: selectedModel,
             messages: apiMessages,
             temperature: 0.6,
-            max_tokens: latestHasImage ? 1024 : 600,
+            max_tokens: latestHasImage ? 800 : 600,
           })
         });
 
@@ -280,15 +291,15 @@ function App() {
               const retryRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                body: JSON.stringify({ model: selectedModel, messages: minimalMessages, temperature: 0.6, max_tokens: 512 })
+                body: JSON.stringify({ model: selectedModel, messages: minimalMessages, temperature: 0.6, max_tokens: 500 })
               });
               if (retryRes.ok) {
                 const retryData = await retryRes.json();
                 let retryContent = retryData.choices?.[0]?.message?.content || '';
-                return cleanThinkTags(retryContent) || 'Sori, gambar lu kegedean. Coba kirim yg lebih kecil ya.';
+                currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+                return cleanThinkTags(retryContent);
               }
             }
-            return 'Sori, gambar lu kegedean buat diproses. Coba kirim foto yg lebih kecil ya!';
           }
 
           if (isRateLimit || isOverCapacity) {
@@ -321,6 +332,10 @@ function App() {
 
         const data = await response.json();
         let content = data.choices?.[0]?.message?.content || '';
+        
+        // Rotasi key berikutnya agar beban seimbang di semua 4 API key
+        currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+        
         return cleanThinkTags(content);
       } // End of retry loop
 

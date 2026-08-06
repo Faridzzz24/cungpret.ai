@@ -13,8 +13,8 @@ const processImageFile = (file) => {
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        const MAX_WIDTH = 768;
-        const MAX_HEIGHT = 768;
+        const MAX_WIDTH = 512;
+        const MAX_HEIGHT = 512;
         let width = img.width;
         let height = img.height;
 
@@ -34,8 +34,8 @@ const processImageFile = (file) => {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Export as JPEG 70% quality — hemat token tapi tetap cukup jelas buat AI baca
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        // Export as JPEG 65% quality — sangat hemat token, anti-limit, dan tetap sangat tajam dibaca AI
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.65);
         resolve(compressedBase64);
       };
       img.onerror = () => reject(new Error('Gagal memproses gambar'));
