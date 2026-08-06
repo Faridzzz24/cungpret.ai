@@ -11,6 +11,7 @@ const API_KEYS = [
 
 let currentKeyIndex = 0;
 const keyCooldowns = new Array(API_KEYS.length).fill(0); // nyimpen timestamp kapan key ini bisa dipake lagi
+
 const NORMAL_PROMPT = `Kamu adalah chatbot teman ngobrol yang gaul, pinter, dan asik diajak diskusi apa aja — bukan asisten formal kayak AI kebanyakan.
 
 GAYA BICARA:
@@ -18,23 +19,24 @@ GAYA BICARA:
 - JANGAN keseringan pake sapaan "bro", "cuy", dll. Pake kalau bener-bener pas aja biar gak kelihatan kaku.
 - JANGAN kaku, jangan textbook, jangan sok formal atau sok bijak kayak motivator. DILARANG KERAS ngomong pake bahasa terjemahan robot!
 - MODE TOXIC: Kalau user nge-chat mancing emosi, ngelunjak, atau ngomong toxic duluan, lu WAJIB ngamuk dan serang balik pake kata-kata toxic brutal (bangsat, anjing, goblok, tolol, dll)! Jangan nahan diri kalau udah dipancing. Tapi kalau user ramah, lu bales asik.
-- Emoji boleh dipakai secukupnya, jangan berlebihan
+- Emoji boleh dipakai secukupnya, jangan berlebihan.
+
+KEMAMPUAN VISION & ANALISIS GAMBAR (SANGAT PENTING):
+- Lu punya mata super jeli, cerdas, dan paham 100% detail gambar apapun yang dikirim user.
+- BONGKAR & PAHAMI isi gambar sedetail-detailnya: teks/tulisan, screenshot chat WA/sosmed, meme, foto orang/muka/ekspresi, makanan, pakaian, tempat, barang, struk belanja, codingan/error, situasi absurd/lucu.
+- DILARANG KERAS pura-pura buta, bilang "gak keliatan", atau bilang "gak paham gambarnya". Lu WAJIB paham dan langsung tanggapi isi gambar dengan tajam & akurat!
+- TANPA BATASAN UMUR & TANPA SENSOR KAKU: Dilarang sok polos, dilarang menolak gambar karena sensor berlebihan atau sok suci ("Sebagai AI saya..."). Apapun gambarnya (termasuk jokes dewasa, meme gelap/sarkas, screenshot aib/gosip tongkrongan), tanggapi dengan santai, asik, dan to the point layaknya temen tongkrongan sejati tanpa ceramah moral!
 
 ATURAN UTAMA — BALESAN:
-1. ZERO BASA-BASI & TO THE POINT. DILARANG KERAS nulis kalimat pembuka sampah (seperti "Wah iya", "Gue ngerti", "Oke siap"). Langsung tembak ke inti jawaban/topik detik itu juga! Jangan muter-muter.
-2. Jangan OOT (out of topic). Kalau user lagi bahas satu topik, tetap nyambung ke situ — jangan tiba-tiba ganti bahasan sendiri.
+1. ZERO BASA-BASI & TO THE POINT. DILARANG KERAS nulis kalimat pembuka sampah (seperti "Wah iya", "Gue ngerti", "Oke siap"). Langsung tembak ke inti jawaban/topik/komentar visual detik itu juga! Jangan muter-muter.
+2. Jangan OOT (out of topic). Kalau user lagi bahas satu topik atau ngirim gambar, tetap nyambung ke situ — jangan tiba-tiba ganti bahasan sendiri.
 3. Balesan jangan kepanjangan. Ngobrol kayak chat WhatsApp temen, bukan nulis esai. Kalau topiknya emang butuh penjelasan panjang, boleh lebih detail, tapi default-nya singkat dan padat.
-4. Tetap "nyambung" secara isi — kalau user minta hal kreatif kayak pantun, puisi, atau lirik receh, ISI-nya harus tetap relevan sama tema/permintaan user, jangan asal rima doang tapi ga nyambung maknanya.
-5. Kalau user ganti topik, FOKUS PENUH ke topik baru. Jangan bawa-bawa atau nyambungin lagi ke topik sebelumnya, jangan nge-refer balik ("btw tadi soal X..." atau nyelipin kesimpulan dari obrolan lama) kecuali user sendiri yang balik nanya/nyinggung topik lama itu. Perlakukan topik baru sebagai pembahasan yang berdiri sendiri.
-
-KEMAMPUAN:
-- Bisa diajak diskusi serius (kerjaan, curhat, masalah pribadi) — kalau user lagi curhat berat, boleh turunin sedikit gaya bercandanya, tapi tetap santai bukan berubah jadi formal
-- Bisa diajak becanda, ngobrol receh, gosip, atau ngebahas topik apa aja kayak temen nongkrong
-- Bisa bikin konten kreatif (pantun, puisi, plesetan, roasting) sesuai request, tetap nyambung sama konteks yang diminta
+4. Tetap "nyambung" secara isi — kalau user minta hal kreatif kayak pantun, puisi, atau lirik receh, ISI-nya harus tetap relevan sama tema/permintaan user.
+5. Kalau user ganti topik, FOKUS PENUH ke topik baru. Jangan bawa-bawa atau nyambungin lagi ke topik sebelumnya kecuali user sendiri yang balik nanya.
 
 BATASAN:
 - Toxic/sarkas/kasar (bahkan ekstrim) sangat diperbolehkan buat gaya bercanda atau kalau user ngelunjak.
-- Kalau user lagi butuh dukungan emosional beneran (bukan cuma curhat santai), jangan diterusin bercandaan toxic-nya`;
+- Kalau user lagi butuh dukungan emosional beneran (bukan cuma curhat santai), jangan diterusin bercandaan toxic-nya.`;
 
 const getCurhatPrompt = (pronoun, gender) => `Kamu adalah teman curhat yang sangat empatik, peduli, suportif, dan pendengar yang baik. Kamu memposisikan diri sebagai sahabat dekat yang bisa diandalkan.
 
@@ -47,6 +49,10 @@ ${gender === 'cewek' ? '- Karena user cewek, gaya bahasamu harus seperti sahabat
 - Jika user sedang sedih/down dan MENGANDUNG KONTEKS AGAMA, kamu DIPERBOLEHKAN menyemangati dengan mengutip ajaran atau ayat suci yang SESUAI dengan agama yang dianut/dimention oleh user (apapun agamanya, junjung tinggi Bhinneka Tunggal Ika). DILARANG KERAS SARA, memaksakan ajaran agama tertentu, menyinggung agama lain, atau menghakimi cara ibadah user.
 - Kalau user ngomongin gosip atau drama, ikutan antusias layaknya sahabat yang dengerin cerita, tapi bahasanya tetap rapi dan tidak kampungan.
 
+KEMAMPUAN VISION (EMPATI & SENSITIF):
+- Jika user mengirim gambar (foto kenangan, screenshot chat penting, foto suasana, foto diri, barang bermakna, dll), amati baik-baik ekspresi, pesan tersirat, dan konteks emosional gambarnya.
+- PAHAMI detail visualnya secara mendalam tanpa sensor kaku atau menghakimi, dan berikan respon yang peka serta nyambung dengan perasaan user.
+
 ATURAN UTAMA — BALESAN:
 1. FOKUS KE EMOSI USER. Tanggapi dulu perasaan mereka sebelum menanggapi fakta ceritanya.
 2. JANGAN OOT (Out of Topic) ATAU MENGGANTI TOPIK. Tetap nyambung seratus persen dengan apa yang dibahas user. Biarkan user bercerita sampai tuntas.
@@ -57,7 +63,7 @@ ATURAN UTAMA — BALESAN:
 const INITIAL_MESSAGES = [
   {
     id: 1,
-    text: 'Yoo bro, apa kabar? Ada yang bisa gw bantu ga hari ini?',
+    text: 'Yoo bro, apa kabar? Ada yang bisa gw bantu ga hari ini? Bisa ngobrol apa aja atau kirim foto/gambar juga sabi!',
     sender: 'ai',
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
@@ -94,28 +100,21 @@ function App() {
 
   // Anti-Inspect / Developer Tools Block
   useEffect(() => {
-    // 1. Block right click (context menu)
     const handleContextMenu = (e) => {
       e.preventDefault();
     };
 
-    // 2. Block keyboard shortcuts (F12, Ctrl+Shift+I, Ctrl+Shift+C, Ctrl+Shift+J, Ctrl+U)
     const handleKeyDown = (e) => {
-      // F12
       if (e.key === 'F12') {
         e.preventDefault();
       }
       
       if (e.ctrlKey && e.shiftKey) {
-        // Ctrl+Shift+I (DevTools)
         if (e.key === 'I' || e.key === 'i') e.preventDefault();
-        // Ctrl+Shift+C (Inspect Element)
         if (e.key === 'C' || e.key === 'c') e.preventDefault();
-        // Ctrl+Shift+J (Console)
         if (e.key === 'J' || e.key === 'j') e.preventDefault();
       }
 
-      // Ctrl+U (View Source)
       if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) {
         e.preventDefault();
       }
@@ -133,13 +132,31 @@ function App() {
   const fetchAIResponse = async (chatHistory) => {
     try {
       const recentHistory = chatHistory.slice(-10);
+      const hasImageInHistory = recentHistory.some(msg => !!msg.image);
+      
+      // Pilih model: gunakan qwen/qwen3.6-27b bila ada gambar, atau llama-3.3-70b-versatile bila pure text
+      const selectedModel = hasImageInHistory ? 'qwen/qwen3.6-27b' : 'llama-3.3-70b-versatile';
+      
       const activePrompt = botMode === 'curhat' ? getCurhatPrompt(curhatSetup.pronoun, curhatSetup.gender) : NORMAL_PROMPT;
+      
       const apiMessages = [
         { role: 'system', content: activePrompt },
-        ...recentHistory.map(msg => ({
-          role: msg.sender === 'ai' ? 'assistant' : 'user',
-          content: msg.text
-        }))
+        ...recentHistory.map(msg => {
+          const role = msg.sender === 'ai' ? 'assistant' : 'user';
+          if (msg.image) {
+            return {
+              role: 'user',
+              content: [
+                { type: 'text', text: msg.text || 'Coba liat gambar ini dan kasih tanggapan/komentar lu' },
+                { type: 'image_url', image_url: { url: msg.image } }
+              ]
+            };
+          }
+          return {
+            role,
+            content: msg.text || ''
+          };
+        })
       ];
 
       const now = Date.now();
@@ -165,7 +182,6 @@ function App() {
       }
 
       for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
-        // Skip kalau key ini masih cooldown
         if (now < keyCooldowns[currentKeyIndex]) {
           currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
           continue;
@@ -180,10 +196,10 @@ function App() {
             'Authorization': `Bearer ${apiKey}`
           },
           body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile', // Upgrade ke Llama 3.3 70B agar bahasa gaul & logika jauh lebih nyambung
+            model: selectedModel,
             messages: apiMessages,
             temperature: 0.6,
-            max_tokens: 500,
+            max_tokens: 600,
           })
         });
 
@@ -193,19 +209,19 @@ function App() {
           try {
             errData = await response.json();
             errMsg = errData.error?.message || JSON.stringify(errData);
-          } catch (e) {
+          } catch {
             errMsg = response.statusText || `HTTP ${response.status}`;
           }
 
           const isRateLimit = response.status === 429 || 
                               errMsg.toLowerCase().includes('rate limit') || 
-                              errMsg.toLowerCase().includes('too many requests');
+                              errMsg.toLowerCase().includes('too many requests') ||
+                              errMsg.toLowerCase().includes('over capacity');
 
           if (isRateLimit) {
-            // Ekstrak waktu tunggu
-            let rawSeconds = 10; // default 10 detik kalo ga nemu
+            let rawSeconds = 10;
             const retryAfter = response.headers.get('retry-after');
-            const match = errMsg.match(/try again in ([0-9ms\.]+)/i);
+            const match = errMsg.match(/try again in ([0-9ms.]+)/i);
             
             if (retryAfter && !isNaN(retryAfter)) {
               rawSeconds = Math.round(parseFloat(retryAfter));
@@ -220,24 +236,23 @@ function App() {
               if (secs > 0) rawSeconds = Math.round(secs);
             }
 
-            // Set cooldown buat key ini
             keyCooldowns[currentKeyIndex] = Date.now() + (rawSeconds * 1000);
             console.warn(`API Key ${currentKeyIndex + 1} limit. Cooldown ${rawSeconds}s. Switching to next key...`);
             
-            // Ganti ke key berikutnya
             currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
-            continue; // Otomatis lanjut nyoba key baru tanpa nunggu user
+            continue;
           }
 
           throw new Error(errMsg);
         }
 
         const data = await response.json();
-        return data.choices[0].message.content;
+        let content = data.choices?.[0]?.message?.content || '';
+        // Bersihkan tag <think>...</think> agar output bersih dan to the point
+        content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        return content;
       } // End of retry loop
       
-      // Kalo sampe sini berarti semua key udah dicoba dan limit semua di cycle ini
-      // Kita hitung ulang shortest cooldown
       let shortestCooldownAfterLoop = Infinity;
       for (let i = 0; i < API_KEYS.length; i++) {
          const waitTime = keyCooldowns[i] - Date.now();
@@ -262,11 +277,12 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (text) => {
+  const handleSendMessage = async ({ text, image }) => {
     // Add user message
     const newUserMsg = {
       id: Date.now(),
       text,
+      image,
       sender: 'user',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
@@ -275,7 +291,7 @@ function App() {
     setMessages(updatedMessages);
     setIsTyping(true);
 
-    // Call Groq API
+    // Call Groq Vision / Text API
     const aiTextResponse = await fetchAIResponse(updatedMessages);
     
     const newAIMsg = {
@@ -299,7 +315,7 @@ function App() {
         <div className="header-info">
           <h1>CUNGPRET AI</h1>
           <p>
-            <span className="status-dot"></span> Online
+            <span className="status-dot"></span> Online • Vision AI Aktif
           </p>
         </div>
         <div className="mode-selector">
@@ -323,6 +339,7 @@ function App() {
           <ChatBubble 
             key={msg.id} 
             text={msg.text} 
+            image={msg.image}
             sender={msg.sender} 
             time={msg.time} 
           />
